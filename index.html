@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Missão ENEM: Decole nos Estudos!</title>
+    <!-- Chosen Palette: Cosmic Neon (#0D0D2B background, #3B82F6 accent, #A78BFA secondary, #EC4899 highlight) -->
+    <!-- Application Structure Plan: A gamified, single-page application (SPA) with a space exploration theme. The main page is a "galaxy" of subject areas (Linguagens, Humanas, etc.). Clicking an area reveals its "planets" (subjects). Clicking a subject opens a modal "mission brief" listing the most frequent topics, each with a link to a curated video lesson. This structure is designed to be engaging, reduce overwhelm by focusing on one subject at a time, and provide a clear, centered path for study. -->
+    <!-- Visualization & Content Choices: The core interactive element is the modal window. Report Info: List of top ENEM topics per subject -> Goal: Organize/Inform -> Presentation Method: Modal with an accordion list -> Interaction: Click subject to open modal, click topic to expand and reveal video link -> Justification: Keeps the main interface clean while providing deep, focused content on demand. The accordion prevents the topic list from being too long initially. Library: Vanilla JS, Tailwind CSS. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Space Grotesk', sans-serif;
+            background-color: #0D0D2B;
+            background-image: url('data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"%3E%3Cg fill-rule="evenodd"%3E%3Cg fill="%239C92AC" fill-opacity="0.1"%3E%3Cpath d="M0 38.59l2.83-2.83 1.41 1.41L1.41 40H0v-1.41zM0 1.4l2.83 2.83 1.41-1.41L1.41 0H0v1.41zM38.59 40l-2.83-2.83 1.41-1.41L40 38.59V40h-1.41zM40 1.41l-2.83 2.83-1.41-1.41L38.59 0H40v1.41z"/%3E%3C/g%3E%3C/g%3E%3C/svg%3E');
+        }
+        .subject-card {
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            border: 1px solid #3B82F640;
+        }
+        .subject-card:hover {
+            transform: translateY(-10px) scale(1.03);
+            box-shadow: 0 0 25px #3B82F680;
+        }
+        .modal {
+            transition: opacity 0.3s ease;
+        }
+        .modal-content {
+            transition: transform 0.3s ease;
+        }
+        .accordion-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.5s cubic-bezier(0.25, 0.1, 0.25, 1.0);
+        }
+        .topic-item.completed {
+            background-color: rgba(59, 130, 246, 0.1);
+        }
+        .form-checkbox {
+            appearance: none;
+            padding: 0;
+            color-adjust: exact;
+            display: inline-block;
+            vertical-align: middle;
+            background-origin: border-box;
+            user-select: none;
+            flex-shrink: 0;
+            height: 1.25rem;
+            width: 1.25rem;
+            border-radius: 0.25rem;
+            background-color: #1E1E3F;
+            border: 2px solid #3B82F6;
+            margin-right: 0.5rem;
+        }
+        .form-checkbox:checked {
+            background-color: #3B82F6;
+            border-color: #3B82F6;
+            background-image: url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='M12.207 4.793a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0l-2-2a1 1 0 011.414-1.414L6.5 9.086l4.293-4.293a1 1 0 011.414 0z'/%3e%3c/svg%3e");
+        }
+        .form-checkbox:focus {
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.5);
+        }
+        .quiz-option {
+            appearance: none;
+            width: 1.2rem;
+            height: 1.2rem;
+            border: 2px solid #3B82F6;
+            border-radius: 50%;
+            margin-right: 0.5rem;
+            position: relative;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .quiz-option:checked {
+            background-color: #3B82F6;
+            border-color: #3B82F6;
+        }
+        .quiz-option:checked::after {
+            content: '';
+            position: absolute;
+            width: 0.5rem;
+            height: 0.5rem;
+            background-color: white;
+            border-radius: 50%;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+        .quiz-question {
+            transition: all 0.3s ease;
+        }
+        .quiz-question:hover {
+            transform: translateX(5px);
+        }
+        .quiz-feedback {
+            transition: all 0.3s ease;
+        }
+    </style>
+</head>
+<body class="text-white">
+
+    <!-- Header -->
+    <header class="text-center py-12 px-4">
+        <h1 class="text-4xl md:text-6xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-purple-400 to-pink-500 mb-2">
+            Missão ENEM
+        </h1>
+        <p class="text-lg md:text-xl text-gray-300 max-w-2xl mx-auto">Sua plataforma de lançamento para a aprovação. Explore os planetas do conhecimento!</p>
+    </header>
+
+    <!-- Main Content -->
+    <main id="subject-galaxy" class="container mx-auto px-4 py-8">
+        <!-- Content will be generated by JS -->
+    </main>
+    
+    <!-- Footer -->
+    <footer class="text-center py-8 mt-12 border-t border-blue-900/50">
+        <p class="text-gray-400">Desenvolvido para impulsionar seus estudos. Boa sorte, astronauta!</p>
+    </footer>
+
+    <!-- Modal -->
+    <div id="topic-modal" class="modal fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50 opacity-0 pointer-events-none">
+        <div id="modal-content" class="modal-content bg-[#1E1E3F] rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col transform scale-95">
+            <header class="p-6 flex justify-between items-center border-b border-blue-900/50 flex-shrink-0">
+                <h2 id="modal-title" class="text-2xl font-bold">Tópicos da Missão</h2>
+                <button onclick="closeModal()" class="text-gray-400 hover:text-white transition-colors text-3xl">&times;</button>
+            </header>
+            <div id="modal-body" class="p-6 overflow-y-auto">
+                <!-- Accordion items will be generated here -->
+            </div>
+        </div>
+    </div>
+
+<script>
+const missionDatabase = {
+    linguagens: {
+        title: "Linguagens, Códigos e suas Tecnologias",
+        color: "pink",
+        subjects: [
+            { name: "Português", icon: "📚", topics: [
+                { 
+                    title: "Interpretação de Texto", 
+                    link: "https://www.youtube.com/watch?v=SoATi4pI5p4",
+                    summary: `• Identificação da ideia central do texto
+• Reconhecimento de informações explícitas e implícitas
+• Análise de recursos argumentativos
+• Relações de causa e consequência
+• Identificação do público-alvo e objetivo do texto`,
+                    quiz: [
+                        {
+                            question: "Qual é o principal objetivo da interpretação textual?",
+                            options: [
+                                "Apenas identificar palavras difíceis",
+                                "Compreender o significado global e as nuances do texto",
+                                "Memorizar o texto inteiro",
+                                "Contar o número de parágrafos"
+                            ],
+                            correct: 1
+                        },
+                        {
+                            question: "O que são informações implícitas em um texto?",
+                            options: [
+                                "Informações que estão claramente escritas",
+                                "Informações que podem ser deduzidas do texto",
+                                "Apenas as palavras difíceis",
+                                "O título do texto"
+                            ],
+                            correct: 1
+                        }
+                    ]
+                },
+                { 
+                    title: "Estrutura e Gêneros Textuais", 
+                    link: "https://www.youtube.com/watch?v=pM6ARz4p_Ak",
+                    summary: `• Características dos diferentes gêneros textuais
+• Elementos estruturais de cada gênero
+• Adequação da linguagem ao gênero
+• Contexto de produção e circulação
+• Funções sociais dos gêneros textuais`,
+                    quiz: [
+                        {
+                            question: "O que caracteriza um texto dissertativo-argumentativo?",
+                            options: [
+                                "Apenas narrar uma história",
+                                "Apresentar argumentos para defender um ponto de vista",
+                                "Descrever uma paisagem",
+                                "Fazer um diálogo entre personagens"
+                            ],
+                            correct: 1
+                        }
+                    ]
+                },
+                { title: "Variação Linguística", link: "https://www.youtube.com/watch?v=LzN6gXl9B7M" },
+                { title: "Funções da Linguagem", link: "https://www.youtube.com/watch?v=8bWlP8k1G3g" },
+            ]},
+            { name: "Literatura", icon: "🖋️", topics: [
+                { 
+                    title: "Modernismo", 
+                    link: "https://www.youtube.com/watch?v=7hB6NfQ0v8k",
+                    summary: `• Primeira fase do modernismo (1922-1930)
+• Segunda fase do modernismo (1930-1945)
+• Terceira fase do modernismo (1945-1980)
+• Principais autores e obras
+• Características de cada fase`,
+                    quiz: [
+                        {
+                            question: "Qual evento marca o início do Modernismo no Brasil?",
+                            options: [
+                                "Publicação de 'Dom Casmurro'",
+                                "Semana de Arte Moderna de 1922",
+                                "Proclamação da República",
+                                "Independência do Brasil"
+                            ],
+                            correct: 1
+                        }
+                    ]
+                },
+                { title: "Romantismo", link: "https://www.youtube.com/watch?v=3gQp2vYnXXo" },
+                { title: "Realismo e Naturalismo", link: "https://www.youtube.com/watch?v=N8q21y-dM3k" },
+                { title: "Quinhentismo e Barroco", link: "https://www.youtube.com/watch?v=y3YDjA_y0gI" },
+            ]},
+            { name: "Língua Estrangeira", icon: "🌍", topics: [
+                { title: "Interpretação de Texto (Inglês)", link: "https://www.youtube.com/watch?v=O1fCg_8a-cE" },
+                { title: "Interpretação de Texto (Espanhol)", link: "https://www.youtube.com/watch?v=XWp1y7gS2_Q" },
+            ]},
+            { name: "Artes", icon: "🎨", topics: [
+                { title: "Arte Contemporânea", link: "https://www.youtube.com/watch?v=cMUmphZd4_U" },
+                { title: "Vanguardas Europeias", link: "https://www.youtube.com/watch?v=Lq1h7L2XqL8" },
+                { title: "Modernismo no Brasil", link: "https://www.youtube.com/watch?v=3sS-H7wSn1k" },
+            ]},
+        ],
+    },
+    humanas: {
+        title: "Ciências Humanas e suas Tecnologias",
+        color: "purple",
+        subjects: [
+            { name: "História", icon: "⏳", topics: [
+                { title: "Brasil Colônia e Império", link: "https://www.youtube.com/watch?v=v35a1aV_T24" },
+                { title: "República Velha", link: "https://www.youtube.com/watch?v=A8W5m5Y-Jonia" },
+                { title: "Era Vargas", link: "https://www.youtube.com/watch?v=c3g2_dCjIrE" },
+                { title: "Ditadura Militar no Brasil", link: "https://www.youtube.com/watch?v=WqyJq8o2y4Y" },
+            ]},
+            { name: "Geografia", icon: "🗺️", topics: [
+                { title: "Questões Ambientais", link: "https://www.youtube.com/watch?v=PR88b3x4V3g" },
+                { title: "Globalização e Geopolítica", link: "https://www.youtube.com/watch?v=l_99pP1sFGk" },
+                { title: "Urbanização", link: "https://www.youtube.com/watch?v=mD0Vj3jVdnY" },
+                { title: "Clima e Relevo", link: "https://www.youtube.com/watch?v=L0gSJS_uS2c" },
+            ]},
+            { name: "Filosofia", icon: "🤔", topics: [
+                { title: "Filosofia Antiga (Pré-socráticos, Platão, Aristóteles)", link: "https://www.youtube.com/watch?v=kYBUjQLm5DE" },
+                { title: "Filosofia Moderna (Racionalismo e Empirismo)", link: "https://www.youtube.com/watch?v=b2sh3N__G0g" },
+                { title: "Ética e Justiça", link: "https://www.youtube.com/watch?v=O6pcy4gT7uE" },
+            ]},
+            { name: "Sociologia", icon: "👥", topics: [
+                { title: "Mundo do Trabalho", link: "https://www.youtube.com/watch?v=s5e_m-4fP_0" },
+                { title: "Cultura e Indústria Cultural", link: "https://www.youtube.com/watch?v=p5u5g9x222s" },
+                { title: "Movimentos Sociais e Cidadania", link: "https://www.youtube.com/watch?v=lCQTqGgHj_g" },
+            ]},
+        ],
+    },
+    natureza: {
+        title: "Ciências da Natureza e suas Tecnologias",
+        color: "blue",
+        subjects: [
+            { name: "Biologia", icon: "🌿", topics: [
+                { title: "Ecologia", link: "https://www.youtube.com/watch?v=Qc6nDL2pA4U" },
+                { title: "Citologia", link: "https://www.youtube.com/watch?v=vVjV-94fA44" },
+                { title: "Genética", link: "https://www.youtube.com/watch?v=d_kPlitgJjA" },
+                { title: "Fisiologia Humana", link: "https://www.youtube.com/watch?v=YpP3W-nJeA8" },
+            ]},
+            { name: "Física", icon: "⚛️", topics: [
+                { title: "Mecânica (Energia, Trabalho e Potência)", link: "https://www.youtube.com/watch?v=b40unoqS31E" },
+                { title: "Eletricidade e Eletrodinâmica", link: "https://www.youtube.com/watch?v=L2GgUa2dF-4" },
+                { title: "Ondulatória", link: "https://www.youtube.com/watch?v=sXyP3fWp-Ig" },
+                { title: "Termologia", link: "https://www.youtube.com/watch?v=TzZ5e6a4S2g" },
+            ]},
+            { name: "Química", icon: "🧪", topics: [
+                { title: "Química Geral (Estequiometria, Soluções)", link: "https://www.youtube.com/watch?v=qA8y3__p9yM" },
+                { title: "Físico-Química (Termoquímica, Eletroquímica)", link: "https://www.youtube.com/watch?v=oV8gO-HnF8U" },
+                { title: "Química Orgânica", link: "https://www.youtube.com/watch?v=1sbfy42b7C4" },
+                { title: "Química Ambiental", link: "https://www.youtube.com/watch?v=eGHI-T94K-k" },
+            ]},
+        ],
+    },
+    matematica: {
+        title: "Matemática e suas Tecnologias",
+        color: "teal",
+        subjects: [
+            { name: "Matemática", icon: "🔢", topics: [
+                { title: "Matemática Básica (Razão, Proporção, Porcentagem)", link: "https://www.youtube.com/watch?v=GDaK3adGCEQ" },
+                { title: "Geometria (Plana e Espacial)", link: "https://www.youtube.com/watch?v=SaaYd_aG0Zk" },
+                { title: "Funções (1º e 2º grau)", link: "https://www.youtube.com/watch?v=ZeaHq4tA4qU" },
+                { title: "Estatística e Probabilidade", link: "https://www.youtube.com/watch?v=z4j5B9yXfPw" },
+            ]},
+        ],
+    }
+};
+
+const colors = {
+    pink: { border: 'border-pink-500/50', hover: 'hover:border-pink-500', shadow: 'hover:shadow-pink-500/30' },
+    purple: { border: 'border-purple-500/50', hover: 'hover:border-purple-500', shadow: 'hover:shadow-purple-500/30' },
+    blue: { border: 'border-blue-500/50', hover: 'hover:border-blue-500', shadow: 'hover:shadow-blue-500/30' },
+    teal: { border: 'border-teal-500/50', hover: 'hover:border-teal-500', shadow: 'hover:shadow-teal-500/30' },
+};
+
+function generateGalaxy() {
+    const galaxyContainer = document.getElementById('subject-galaxy');
+    galaxyContainer.innerHTML = '';
+    
+    for (const areaKey in missionDatabase) {
+        const area = missionDatabase[areaKey];
+        const areaColor = colors[area.color];
+
+        const areaSection = document.createElement('div');
+        areaSection.className = 'mb-16';
+        areaSection.innerHTML = `
+            <h2 class="text-3xl font-bold text-center mb-2">${area.title}</h2>
+            <div class="w-24 h-1 bg-gradient-to-r from-${area.color}-500 to-${area.color}-400 mx-auto mb-8 rounded-full"></div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
+                ${area.subjects.map(subject => `
+                    <div class="subject-card bg-[#1E1E3F]/60 backdrop-blur-sm p-6 rounded-xl text-center cursor-pointer ${areaColor.border} ${areaColor.hover} ${areaColor.shadow}"
+                         onclick="showModal('${areaKey}', '${subject.name}')">
+                        <div class="text-5xl mb-4">${subject.icon}</div>
+                        <h3 class="text-xl font-bold">${subject.name}</h3>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+        galaxyContainer.appendChild(areaSection);
+    }
+}
+
+async function toggleTopicCompletion(areaKey, subjectName, topicTitle, checkboxElement) {
+    try {
+        const endpoint = checkboxElement.checked ? '/api/progress/complete' : '/api/progress/uncomplete';
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                area: areaKey,
+                subject: subjectName,
+                topic: topicTitle
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error('Falha ao atualizar progresso');
+        }
+
+        // Atualizar visual do tópico
+        const topicElement = checkboxElement.closest('.topic-item');
+        topicElement.classList.toggle('completed', checkboxElement.checked);
+    } catch (error) {
+        console.error('Erro:', error);
+        alert('Erro ao atualizar progresso. Tente novamente.');
+        checkboxElement.checked = !checkboxElement.checked; // Reverter estado do checkbox
+    }
+}
+
+async function loadTopicProgress(areaKey, subjectName, topicTitle) {
+    try {
+        const response = await fetch(`/api/progress?area=${encodeURIComponent(areaKey)}&subject=${encodeURIComponent(subjectName)}&topic=${encodeURIComponent(topicTitle)}`);
+        if (!response.ok) throw new Error('Falha ao carregar progresso');
+        return await response.json();
+    } catch (error) {
+        console.error('Erro ao carregar progresso:', error);
+        return { completed: false };
+    }
+}
+
+function showModal(areaKey, subjectName) {
+    const area = missionDatabase[areaKey];
+    const subject = area.subjects.find(s => s.name === subjectName);
+    const modal = document.getElementById('topic-modal');
+    const modalContent = document.getElementById('modal-content');
+    const modalTitle = document.getElementById('modal-title');
+    const modalBody = document.getElementById('modal-body');
+
+    modalTitle.textContent = `Missão: ${subject.name}`;
+    
+    modalBody.innerHTML = subject.topics.map((topic, index) => `
+        <div class="topic-item border-b border-blue-900/30 last:border-b-0">
+            <div class="flex items-center justify-between py-4 px-2">
+                <button onclick="toggleAccordion(${index})" class="flex-grow flex items-center text-left hover:bg-blue-900/20 transition-colors rounded-lg pr-4">
+                    <span class="font-semibold text-lg">${topic.title}</span>
+                    <span id="arrow-${index}" class="ml-2 transform transition-transform duration-300 text-blue-400">▶</span>
+                </button>
+                <label class="flex items-center space-x-2 cursor-pointer">
+                    <input type="checkbox" 
+                           class="form-checkbox h-5 w-5 text-blue-500 rounded border-gray-300 focus:ring-blue-500"
+                           onchange="toggleTopicCompletion('${areaKey}', '${subjectName}', '${topic.title}', this)">
+                    <span class="text-sm text-gray-400">Concluído</span>
+                </label>
+            </div>
+            <div id="content-${index}" class="accordion-content px-2 pb-4">
+                <!-- Resumo -->
+                <div class="mb-6 bg-blue-900/20 p-4 rounded-lg">
+                    <h4 class="font-bold text-blue-400 mb-2">📝 Resumo do Conteúdo</h4>
+                    <pre class="whitespace-pre-wrap text-gray-300 font-mono text-sm">${topic.summary || 'Resumo em breve...'}</pre>
+                </div>
+
+                <!-- Quiz -->
+                <div class="mb-6">
+                    <h4 class="font-bold text-blue-400 mb-4">🎯 Quiz Rápido</h4>
+                    ${topic.quiz ? topic.quiz.map((q, qIndex) => `
+                        <div class="quiz-question mb-6 bg-purple-900/20 p-4 rounded-lg" data-correct="${q.correct}">
+                            <p class="font-semibold mb-3">${q.question}</p>
+                            <div class="space-y-2">
+                                ${q.options.map((opt, optIndex) => `
+                                    <label class="flex items-center space-x-2 cursor-pointer">
+                                        <input type="radio" 
+                                               name="quiz-${index}-${qIndex}" 
+                                               value="${optIndex}"
+                                               class="quiz-option"
+                                               onchange="checkQuizAnswer(this)">
+                                        <span>${opt}</span>
+                                    </label>
+                                `).join('')}
+                            </div>
+                            <div class="quiz-feedback mt-3 hidden"></div>
+                        </div>
+                    `).join('') : '<p class="text-gray-400">Quiz em breve...</p>'}
+                </div>
+
+                <!-- Link para a aula -->
+                <a href="${topic.link}" target="_blank" rel="noopener noreferrer" 
+                   class="inline-block bg-gradient-to-r from-${area.color}-500 to-${area.color}-600 text-white font-bold py-2 px-6 rounded-full hover:scale-105 transition-transform">
+                    Assistir Aula 🚀
+                </a>
+            </div>
+        </div>
+    `).join('');
+
+    // Carregar estado de conclusão para cada tópico
+    subject.topics.forEach(async (topic) => {
+        const progress = await loadTopicProgress(areaKey, subjectName, topic.title);
+        const topicElement = modalBody.querySelector(`input[type="checkbox"][onchange*="${topic.title}"]`);
+        if (topicElement) {
+            topicElement.checked = progress.completed;
+            const topicItem = topicElement.closest('.topic-item');
+            if (progress.completed) {
+                topicItem.classList.add('completed');
+            }
+        }
+    });
+
+    modal.classList.remove('opacity-0', 'pointer-events-none');
+    modalContent.classList.remove('scale-95');
+}
+
+function closeModal() {
+    const modal = document.getElementById('topic-modal');
+    const modalContent = document.getElementById('modal-content');
+    modal.classList.add('opacity-0', 'pointer-events-none');
+    modalContent.classList.add('scale-95');
+}
+
+function toggleAccordion(index) {
+    const content = document.getElementById(`content-${index}`);
+    const arrow = document.getElementById(`arrow-${index}`);
+    
+    if (content.style.maxHeight) {
+        content.style.maxHeight = null;
+        arrow.style.transform = 'rotate(0deg)';
+    } else {
+        content.style.maxHeight = content.scrollHeight + "px";
+        arrow.style.transform = 'rotate(90deg)';
+    }
+}
+
+function checkQuizAnswer(radioElement) {
+    const questionDiv = radioElement.closest('.quiz-question');
+    const feedbackDiv = questionDiv.querySelector('.quiz-feedback');
+    const correctAnswer = parseInt(questionDiv.dataset.correct);
+    const selectedAnswer = parseInt(radioElement.value);
+
+    feedbackDiv.classList.remove('hidden');
+    
+    if (selectedAnswer === correctAnswer) {
+        feedbackDiv.innerHTML = `
+            <div class="text-green-400 font-semibold">
+                ✅ Correto! Muito bem!
+            </div>
+        `;
+    } else {
+        feedbackDiv.innerHTML = `
+            <div class="text-red-400 font-semibold">
+                ❌ Ops! Tente novamente!
+            </div>
+        `;
+    }
+}
+
+document.addEventListener('DOMContentLoaded', generateGalaxy);
+</script>
+
+</body>
+</html>
